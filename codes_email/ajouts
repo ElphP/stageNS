@@ -72,63 +72,160 @@ return new class extends Migration
 
 //  traitement des mails en intégrant les variables (en cours) dans demande_controller?
   
+<?php
 
-    public function email(Request $request)  {
-         $id_template_email= $request   ;
-        // email en cas de validation avec un montant accordé
-         
-        if ($id_template_email== 2)  {
-            $request->validate([
-                // 'name' => 'required',
-                'email' => 'required|email|unique:users',
-                'montant_accorde' => 'required',
-            ]);
+namespace App\Http\Controllers;
 
-            // $data = $request->all();
-            // $check = $this->create($data);
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 
-            $recipientEmail = $request->email;
-            $montant_accorde = $request->montant_accorde;
+use App\Models\Demande;
+use App\Models\estimation_recettes;
+use App\Models\Budget_prev;
+use App\Models\Budget_reel;
+use App\Models\remunerations;
+use App\models\Criteres;
+use App\Models\Cr_simplifie;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
+// use DB;
+use Input;
+//use File;
+use ZipArchive;
 
+use Rap2hpoutre\FastExcel\FastExcel;
+use Box\Spout\Writer\Common\Creator\Style\StyleBuilder;
 
+use Exception;
 
-           
-            //get title and body from table `email_templates` where id = 6
-            $email_template = DB::table('email_templates')->where('id', $id_template_email)->first();
+class DemandesController extends Controller
+{
+    public function create()
+    {
 
-            $html = nl2br($email_template->body);
-            $html = str_replace('###MONTANT_ACCORDE###', $montant_accorde, $html);
+        if (Auth::check()) {
 
-            $title = $email_template->subject;
-            if ($title == '') {
-                die('Email template not found');
-            }
-            /*
-             echo $title;
-             echo '<br>';
-             echo $html;
-             exit;*/
+            return view('demande');
+        } else {
+            return redirect('login');
+        }
+    }
 
+    public function  modification_statutsave(Request $request)
+    {      
+        $id = $request->id_demande;
+        $record =  Demande::where('id', $id)->first();
+        $record->statut = $request->statut;
+        $record->save();
+        
+        $template = DB::table('email_templates')->where('statut', (int)($request->statut))->first();
+       
 
-            $data = [
-                'name' => 'FONDS',
-                'message' => '',
-            ];
+        $html = 'Votre dossier a bien été reçu. Il est actuellement en cours d’instruction en vue de la commission d’attribution. 
+<br><br>
+Vous serez informé.e de sa décision finale par mail courant juin. Nous vous prions de bien vouloir patienter jusqu\'à cette notification et nous restons bien entendu à votre disposition pour toute question d\'ordre général.
+Nous vous remercions de votre confiance et nous espérons pouvoir apporter une réponse favorable à votre demande.
+<br><br>
+        Bien à vous,
+        <br>
+        L’équipe d’Avignon Festival & Compagnies
+        ';
 
-            // $plainText = 'Votre mdp pour  la plateforme de dépôt de dossier : ' . $password;
-
-            Mail::send([], $data, function ($message) use ($recipientEmail, $html, $plainText, $title) {
-                $message->to($recipientEmail)
-                    ->subject($title)
-                    ->html($html)
-                    ->text($plainText);
-            });
-
-            return redirect(".....")->withSuccess('L\'email de validation a bien été envoyé!');
+        if ($request->statut == 1) {
             
+            $message = nl2br($template->body);
+            $message = str_replace('###MONTANT_ACCORDE###', $record->montant_accorde, $message);            
+            $this->envoyerEmail($record->email, $message, $template->subject);
+            //  $this->envoyerEmail($record->email,'Votre demande a été accordée','Demande accordée');
+            // $this->envoyerEmail($record->email, nl2br($template->body), $template->subject);
+            //if demande accordée then in record of demande , field onglets must be updated to budget_reel
+            $record->onglets = 'btn_tab_budget_reel';
+            $record->save();
+        }
+        if ($request->statut == 3) {
+            // $this->envoyerEmail($record->email,$html,'Fonds de soutien à l’émergence et à la création du festival Off 2023 - Dossier envoyé ');
+            $this->envoyerEmail($record->email, nl2br($template->body), $template->subject);
+        }
+        if ($request->statut == 4) {
+            //    $this->envoyerEmail($record->email,'Votre demande a été refusée','Demande refusée');
+            $this->envoyerEmail($record->email, nl2br($template->body), $template->subject);
         }
 
-
-
+        if ($request->statut == 5 && $record->crit_refus!='') {
+          
+            
+            $tab_crit_refus=[
+            'lic'=>"- License",
+            'conv'=>"- Convention collective",
+            'ca'=>"- Ne pas avoir réalisé un chiffre d’affaires supérieur à 100 000€ sur l’année 2023 ",
+            'date'=>"- Les structures doivent avoir été créées après le 1er janvier 2014",
+            'nbr_repr'=>"- Nombre de représentations",
+            'nbr_rod'=>"- Le spectacle doit être une création pour Avignon avec une tolérance de 12 représentations de rodage ",
+            'auteur'=>"- Les auteur-rice-s, compositeur-rice-s, ou chorégraphe-s doivent être contemporain-e-s : vivant-e-s ou mort-e-s depuis moins de 5 ans (les montages de textes et adaptations ne sont pas éligibles)",
+            'rem_min'=>"- Verser à chaque artiste au plateau une rémunération au moins égale à 124,50€ brut en cas de rémunération au cachet et 2614,50€ brut en cas de rémunération mensualisée",
+            'bdgt'=>"- Budget équilbré"
+        ];
+        
+       // messages non utilisés provenant du mail original:
+       // - Ne déposer qu’un seul dossier par structure et par an 
+       // - Ne pas avoir déjà perçu les aides d’AF&C (Fonds de soutien à la professionnalisation ou Fonds de soutien à l’émergence et à la création)  
+       //  
+            
+            $message = nl2br($template->body);
+            foreach($tab_crit_refus as $key=>$value)  {
+                if($key==$record->crit_refus)  {
+                    $message = str_replace('###CRIT_REFUS###', $value, $message);
+                    break;
+                }
+            }
+            
      
+           
+            $this->envoyerEmail($record->email, $message, $template->subject);
+            //$this->envoyerEmail($record->email,'Votre demande n\'est pas éligible','Demande non éligible');
+            // $this->envoyerEmail($record->email, nl2br($template->body), $template->subject);
+            
+ 
+
+        }
+
+        if ($request->statut == 6) {
+            //     $this->envoyerEmail($record->email,'Votre demande a été envoyée à la commission 2','Demande envoyée commission 2');
+            $this->envoyerEmail($record->email, nl2br($template->body), $template->subject);
+        }
     }
+
+    public function envoyerEmail($email, $message, $sujet)
+    {
+        // Define the recipient's email address
+        $recipientEmail = $email;
+
+
+        // Define the data to pass to the email template
+        $data = [
+            'name' => 'FONDS',
+            'message' => $message,
+        ];
+
+        // Create the HTML content for the email
+        $html =  $message;
+
+        // Create a plain text version of the email
+
+        //force plain text
+        $plainText = strip_tags($message);
+
+        //demande lisa 01/09/2023
+        //return 1;
+        echo $message;
+        exit;
+        // Send the email using the send() method
+        return Mail::send([], $data, function ($message) use ($recipientEmail, $html, $plainText, $sujet) {
+            $message->to($recipientEmail)
+                ->subject($sujet)
+                ->html($html)
+                ->text($plainText);
+        });
+    }
+
