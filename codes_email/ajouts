@@ -1,0 +1,134 @@
+// Modele demande: ajout
+ // v3 2024: 
+        'montant_accorde',
+        'crit_refus'
+
+// Insertion de 2 fieldsets après le fieldset Notes dans "demande-modification"
+           <fieldset class=" block-content">
+                    <legend>Aide accordée :</legend>
+
+
+
+                    <div class="mb-3 " style="width:280px">
+                        <input type="number" class="form-control" name="montant_accorde" id="montant_accorde"
+                            placeholder="Montant" value="{{ $record->montant_accorde}}"  />
+                    </div>
+
+
+                </fieldset>
+                <fieldset class=" block-content">
+                    <legend>Critère de refus :</legend>
+                     <div class="mb-3 "  style="width:280px">
+                        <select type="text" class="form-control" name="crit_refus" id="crit_refus">
+                            <option value="" @if ($record->crit_refus=="" ) selected @endif>--Choix--</option>
+                            <option value="lic" @if ($record->crit_refus=="lic" ) selected @endif>License</option>
+                            <option value="conv" @if ($record->crit_refus=="conv" ) selected @endif>Convention collective</option>
+                            <option value="ca" @if ($record->crit_refus=="ca" ) selected @endif>Chiffre d'affaire</option>
+                            <option value="date" @if ($record->crit_refus=="date" ) selected @endif>Date de création</option>
+                            <option value="nbr_repr" @if ($record->crit_refus=="nbr_repr" ) selected @endif>Nombre de représentatons</option>
+                            <option value="nbr_rod" @if ($record->crit_refus=="nbr_rod" ) selected @endif>Nombre de rodage</option>
+                            <option value="auteur" @if ($record->crit_refus=="auteur" ) selected @endif>Auteur contemporain</option>
+                            <option value="rem_min" @if ($record->crit_refus=="rem_min" ) selected @endif>Rémunérations minimum</option>
+                            <option value="bdgt" @if ($record->crit_refus=="bdgt" ) selected @endif>Budget prévisionnel équilibré</option>
+                        </select>
+                    </div>
+
+                </fieldset>
+
+// création d'un fichier de migration pour ajouter 2 colonnes dans la table demande: add_email_variables_to_demandes
+
+          <?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        Schema::table('demandes', function (Blueprint $table) {
+            $table->integer('montant_accorde')->nullable();
+            $table->string('crit_refus', 200)->nullable();
+        });
+    }
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        Schema::table('demandes', function (Blueprint $table) {
+            //
+        });
+    }
+};
+
+//  traitement des mails en intégrant les variables (en cours) dans demande_controller?
+  
+
+    public function email(Request $request)  {
+         $id_template_email= $request   ;
+        // email en cas de validation avec un montant accordé
+         
+        if ($id_template_email== 2)  {
+            $request->validate([
+                // 'name' => 'required',
+                'email' => 'required|email|unique:users',
+                'montant_accorde' => 'required',
+            ]);
+
+            // $data = $request->all();
+            // $check = $this->create($data);
+
+            $recipientEmail = $request->email;
+            $montant_accorde = $request->montant_accorde;
+
+
+
+           
+            //get title and body from table `email_templates` where id = 6
+            $email_template = DB::table('email_templates')->where('id', $id_template_email)->first();
+
+            $html = nl2br($email_template->body);
+            $html = str_replace('###MONTANT_ACCORDE###', $montant_accorde, $html);
+
+            $title = $email_template->subject;
+            if ($title == '') {
+                die('Email template not found');
+            }
+            /*
+             echo $title;
+             echo '<br>';
+             echo $html;
+             exit;*/
+
+
+            $data = [
+                'name' => 'FONDS',
+                'message' => '',
+            ];
+
+            // $plainText = 'Votre mdp pour  la plateforme de dépôt de dossier : ' . $password;
+
+            Mail::send([], $data, function ($message) use ($recipientEmail, $html, $plainText, $title) {
+                $message->to($recipientEmail)
+                    ->subject($title)
+                    ->html($html)
+                    ->text($plainText);
+            });
+
+            return redirect(".....")->withSuccess('L\'email de validation a bien été envoyé!');
+            
+        }
+
+
+
+     
+    }
