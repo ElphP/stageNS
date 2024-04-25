@@ -194,4 +194,22 @@ Nous vous remercions de votre confiance et nous espérons pouvoir apporter une r
         }
     }
 
-  
+  //++désactivation des boutons si le champ n'est pas rempli
+
+         <td style=" width:20%; " rel="{{$d->statut}}">
+       
+
+          <div class="btn-group" role="group" aria-label="statut" style=" padding:2px">
+          
+          <button data-demande_id="{{$d->id}}" rel="0" type="button" class=" @if ($d->statut == 0) active @else disabled @endif statut btn btn-sm btn-warning" rel=>En cours</button>
+          <button data-demande_id="{{$d->id}}" rel="3" type="button" class="@if ($d->statut ==  3) active @else disabled @endif statut btn btn-sm btn-info">Envoyée</button>
+          <button data-demande_id="{{$d->id}}" rel="1" type="button" class=" @if ($d->statut == 1 && $d->montant_accorde!="") active @else disabled @endif statut btn btn-sm btn-success">Accordé</button>
+          <button data-demande_id="{{$d->id}}" rel="2" type="button" class=" @if ($d->statut == 2) active @else disabled @endif statut btn btn-sm btn-warning">Etude dossier en cours</button>
+</div>
+<div class="btn-group" role="group" aria-label="statut" >
+          <button data-demande_id="{{$d->id}}" rel="4" type="button" class=" @if ($d->statut == 4) active @else disabled @endif statut btn btn-sm btn-danger">Non accordé</button>
+          <button data-demande_id="{{$d->id}}" rel="5" type="button" class=" @if ($d->statut == 5 && $d->crit_refus!="") active @else disabled @endif statut btn btn-sm btn-danger">Non éligible</button>
+          <button data-demande_id="{{$d->id}}" rel="6" type="button" class=" @if ($d->statut == 6) active @else disabled @endif statut btn btn-sm btn-success">Envoyée commission 2</button>
+          </div>
+                
+                  </td>
