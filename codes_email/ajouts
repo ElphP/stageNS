@@ -3,37 +3,9 @@
         'montant_accorde',
         'crit_refus'
 
-// Insertion de 2 fieldsets après le fieldset Notes dans "demande-modification"
-           <fieldset class=" block-content">
-                    <legend>Aide accordée :</legend>
 
 
 
-                    <div class="mb-3 " style="width:280px">
-                        <input type="number" class="form-control" name="montant_accorde" id="montant_accorde"
-                            placeholder="Montant" value="{{ $record->montant_accorde}}"  />
-                    </div>
-
-
-                </fieldset>
-                <fieldset class=" block-content">
-                    <legend>Critère de refus :</legend>
-                     <div class="mb-3 "  style="width:280px">
-                        <select type="text" class="form-control" name="crit_refus" id="crit_refus">
-                            <option value="" @if ($record->crit_refus=="" ) selected @endif>--Choix--</option>
-                            <option value="lic" @if ($record->crit_refus=="lic" ) selected @endif>License</option>
-                            <option value="conv" @if ($record->crit_refus=="conv" ) selected @endif>Convention collective</option>
-                            <option value="ca" @if ($record->crit_refus=="ca" ) selected @endif>Chiffre d'affaire</option>
-                            <option value="date" @if ($record->crit_refus=="date" ) selected @endif>Date de création</option>
-                            <option value="nbr_repr" @if ($record->crit_refus=="nbr_repr" ) selected @endif>Nombre de représentatons</option>
-                            <option value="nbr_rod" @if ($record->crit_refus=="nbr_rod" ) selected @endif>Nombre de rodage</option>
-                            <option value="auteur" @if ($record->crit_refus=="auteur" ) selected @endif>Auteur contemporain</option>
-                            <option value="rem_min" @if ($record->crit_refus=="rem_min" ) selected @endif>Rémunérations minimum</option>
-                            <option value="bdgt" @if ($record->crit_refus=="bdgt" ) selected @endif>Budget prévisionnel équilibré</option>
-                        </select>
-                    </div>
-
-                </fieldset>
 
 // création d'un fichier de migration pour ajouter 2 colonnes dans la table demande: add_email_variables_to_demandes
 
@@ -53,7 +25,7 @@ return new class extends Migration
     public function up()
     {
         Schema::table('demandes', function (Blueprint $table) {
-            $table->integer('montant_accorde')->nullable();
+            $table->decimal('montant_accorde',10,2)->nullable();
             $table->string('crit_refus', 200)->nullable();
         });
     }
@@ -70,58 +42,101 @@ return new class extends Migration
     }
 };
 
-//  traitement des mails en intégrant les variables (en cours) dans demande_controller?
-  
-<?php
 
-namespace App\Http\Controllers;
+//Modification des templates EMail en remplaçant les données par ###MONTANT_ACCORDE### (statut1) et ###CRIT_REFUS### (statut 5)
 
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
 
-use App\Models\Demande;
-use App\Models\estimation_recettes;
-use App\Models\Budget_prev;
-use App\Models\Budget_reel;
-use App\Models\remunerations;
-use App\models\Criteres;
-use App\Models\Cr_simplifie;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\DB;
-// use DB;
-use Input;
-//use File;
-use ZipArchive;
 
-use Rap2hpoutre\FastExcel\FastExcel;
-use Box\Spout\Writer\Common\Creator\Style\StyleBuilder;
 
-use Exception;
+//Création de 2 variables d'ENV qui permettent de changer facilement les critères de refus :
+# criteres de refus modifiables
+TAB_AFFICH_SELECT="{'lic':'License',
+ 'conv':'Convention Collective',
+  'ca':'Chiffre d###affaire',
+   'date':'Date de création',
+    'nbr_repr':'Nombre de représentations',
+    'nbr_rod':'Nombre de rodages nécessaires',
+    'auteur':'Auteur contemporain',
+    'rem_min':'Rémunération minimum',
+    'bdgt':'Budget équilibré'
+    }"
+TAB_MESSAGE_MAIL="{'lic':'- License',
+            'conv':'- Convention collective',
+            'ca':'- Ne pas avoir réalisé un chiffre d###affaires supérieur à 100 000€ sur l###année 2023 ',
+            'date':'- Les structures doivent avoir été créées après le 1er janvier 2014',
+            'nbr_repr':'- Nombre de représentations',
+            'nbr_rod':'- Le spectacle doit être une création pour Avignon avec une tolérance de 12 représentations de rodage ',
+            'auteur':'- Les auteur-rice-s, compositeur-rice-s, ou chorégraphe-s doivent être contemporain-e-s : vivant-e-s ou mort-e-s depuis moins de 5 ans (les montages de textes et adaptations ne sont pas éligibles)',
+            'rem_min':'- Verser à chaque artiste au plateau une rémunération au moins égale à 124,50€ brut en cas de rémunération au cachet et 2614,50€ brut en cas de rémunération mensualisée',
+            'bdgt':'- Budget équilibré'
+            }"
 
-class DemandesController extends Controller
-{
-    public function create()
+
+
+// Changements dans demande_modifications
+   
+    //Changement dans demande_modification "Notes" devient "Autres"
+         <li class="nav-item">
+            <a class="nav-link" href="#notes" role="tab" data-toggle="tab">Autres</a>
+        </li>
+
+
+  //Ajout des 2 fieldset en dessous de celui de "notes"
+                 
+
+
+                 <fieldset class=" block-content">
+                    <legend>Aide accordée :</legend>
+                    <div class="mb-3 " style="width:280px">
+                        <input type="number" class="form-control" name="montant_accorde" id="montant_accorde"
+                            placeholder="Montant" value="{{ $record->montant_accorde}}"  />
+                    </div>
+                </fieldset>
+
+                <fieldset class=" block-content">
+                    <legend>Critère de refus :</legend>
+                     <div class="mb-3 "  style="width:280px">
+                        {{-- transformation de la variable ENV en tableau utilisable --}}
+                        @php 
+                        $tab_affich_select = str_replace("'", '"',env('TAB_AFFICH_SELECT'));
+                        $tab_affich_select = str_replace("###", "'",$tab_affich_select);
+                        
+                        $tab_affich_select = json_decode( $tab_affich_select ,true); 
+                        @endphp
+
+                        <select type="text" class="form-control" name="crit_refus" id="crit_refus">
+                            
+                            <option value="" @if ($record->crit_refus=="" ) selected @endif>--Choix--</option>
+                           
+                            @foreach ($tab_affich_select as $key=>$value)
+                                <option value={{$key}} @if ($record->crit_refus== $key) selected @endif>{{$value}}</option>
+                            @endforeach
+                        </select>
+                        
+                    </div>
+                </fieldset>
+
+//  traitement des mails en intégrant les variables dans demande_controller
+       //changement  de "use \DB;" en "use Illuminate\Support\Facades\DB;"
+
+      //Ajout de 2 lignes dans modificationsave (en dessous  de ce qui concerne les notes)
+
+            $record->notes = $request->notes;
+            $record->montant_accorde = $request->montant_accorde;
+            $record->crit_refus = $request->crit_refus;
+
+        //Changements dans modification_satutsave (statuts 1 et 5)
+
+           public function  modification_statutsave(Request $request)
     {
-
-        if (Auth::check()) {
-
-            return view('demande');
-        } else {
-            return redirect('login');
-        }
-    }
-
-    public function  modification_statutsave(Request $request)
-    {      
+       
         $id = $request->id_demande;
         $record =  Demande::where('id', $id)->first();
         $record->statut = $request->statut;
         $record->save();
         
         $template = DB::table('email_templates')->where('statut', (int)($request->statut))->first();
-       
-
+     
         $html = 'Votre dossier a bien été reçu. Il est actuellement en cours d’instruction en vue de la commission d’attribution. 
 <br><br>
 Vous serez informé.e de sa décision finale par mail courant juin. Nous vous prions de bien vouloir patienter jusqu\'à cette notification et nous restons bien entendu à votre disposition pour toute question d\'ordre général.
@@ -142,6 +157,7 @@ Nous vous remercions de votre confiance et nous espérons pouvoir apporter une r
             //if demande accordée then in record of demande , field onglets must be updated to budget_reel
             $record->onglets = 'btn_tab_budget_reel';
             $record->save();
+            
         }
         if ($request->statut == 3) {
             // $this->envoyerEmail($record->email,$html,'Fonds de soutien à l’émergence et à la création du festival Off 2023 - Dossier envoyé ');
@@ -153,25 +169,11 @@ Nous vous remercions de votre confiance et nous espérons pouvoir apporter une r
         }
 
         if ($request->statut == 5 && $record->crit_refus!='') {
-          
+            $tab_crit_refus = str_replace("'", '"',env('TAB_MESSAGE_MAIL'));
+            $tab_crit_refus = str_replace("###", "'",$tab_crit_refus);
             
-            $tab_crit_refus=[
-            'lic'=>"- License",
-            'conv'=>"- Convention collective",
-            'ca'=>"- Ne pas avoir réalisé un chiffre d’affaires supérieur à 100 000€ sur l’année 2023 ",
-            'date'=>"- Les structures doivent avoir été créées après le 1er janvier 2014",
-            'nbr_repr'=>"- Nombre de représentations",
-            'nbr_rod'=>"- Le spectacle doit être une création pour Avignon avec une tolérance de 12 représentations de rodage ",
-            'auteur'=>"- Les auteur-rice-s, compositeur-rice-s, ou chorégraphe-s doivent être contemporain-e-s : vivant-e-s ou mort-e-s depuis moins de 5 ans (les montages de textes et adaptations ne sont pas éligibles)",
-            'rem_min'=>"- Verser à chaque artiste au plateau une rémunération au moins égale à 124,50€ brut en cas de rémunération au cachet et 2614,50€ brut en cas de rémunération mensualisée",
-            'bdgt'=>"- Budget équilbré"
-        ];
-        
-       // messages non utilisés provenant du mail original:
-       // - Ne déposer qu’un seul dossier par structure et par an 
-       // - Ne pas avoir déjà perçu les aides d’AF&C (Fonds de soutien à la professionnalisation ou Fonds de soutien à l’émergence et à la création)  
-       //  
-            
+            $tab_crit_refus = json_decode( $tab_crit_refus ,true); 
+    
             $message = nl2br($template->body);
             foreach($tab_crit_refus as $key=>$value)  {
                 if($key==$record->crit_refus)  {
@@ -179,15 +181,11 @@ Nous vous remercions de votre confiance et nous espérons pouvoir apporter une r
                     break;
                 }
             }
-            
-     
            
             $this->envoyerEmail($record->email, $message, $template->subject);
             //$this->envoyerEmail($record->email,'Votre demande n\'est pas éligible','Demande non éligible');
             // $this->envoyerEmail($record->email, nl2br($template->body), $template->subject);
             
- 
-
         }
 
         if ($request->statut == 6) {
@@ -196,41 +194,4 @@ Nous vous remercions de votre confiance et nous espérons pouvoir apporter une r
         }
     }
 
-    public function envoyerEmail($email, $message, $sujet)
-    {
-        // Define the recipient's email address
-        $recipientEmail = $email;
-
-
-        // Define the data to pass to the email template
-        $data = [
-            'name' => 'FONDS',
-            'message' => $message,
-        ];
-
-        // Create the HTML content for the email
-        $html =  $message;
-
-        // Create a plain text version of the email
-
-        //force plain text
-        $plainText = strip_tags($message);
-
-        //demande lisa 01/09/2023
-        //return 1;
-        echo $message;
-        exit;
-        // Send the email using the send() method
-        return Mail::send([], $data, function ($message) use ($recipientEmail, $html, $plainText, $sujet) {
-            $message->to($recipientEmail)
-                ->subject($sujet)
-                ->html($html)
-                ->text($plainText);
-        });
-    }
-
-# criteres de refus
-TAB_KEY= NULL,"lic","conv","ca","date","nbr_repr","nb_rod","auteur","rem_min","bdgt"
-TAB_AFFICH_SELECT="--Choix--","Convention collective","Chiffre d'affaire","Date de création","Nombre de représentations","Nombre de rodages nécessaires","Auteur contemporain","Rémunération minimum","Budget équilibré"
-TAB_MESSAGE_MAIL="- License","- Convention collective","- Ne pas avoir réalisé un chiffre d'affaires supérieur à 100 000€ sur l année 2023 ","- Les structures doivent avoir été créées après le 1er janvier 2014","- Nombre de représentations","- Le spectacle doit être une création pour Avignon avec une tolérance de 12 représentations de rodage ","- Les auteur-rice-s, compositeur-rice-s, ou chorégraphe-s doivent être contemporain-e-s : vivant-e-s ou mort-e-s depuis moins de 5 ans (les montages de textes et adaptations ne sont pas éligibles)","- Verser à chaque artiste au plateau une rémunération au moins égale à 124,50€ brut en cas de rémunération au cachet et 2614,50€ brut en cas de rémunération mensualisée","- Budget équilbré"
-
+  
