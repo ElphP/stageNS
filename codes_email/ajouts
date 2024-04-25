@@ -229,3 +229,8 @@ Nous vous remercions de votre confiance et nous espérons pouvoir apporter une r
         });
     }
 
+# criteres de refus
+TAB_KEY= NULL,"lic","conv","ca","date","nbr_repr","nb_rod","auteur","rem_min","bdgt"
+TAB_AFFICH_SELECT="--Choix--","Convention collective","Chiffre d'affaire","Date de création","Nombre de représentations","Nombre de rodages nécessaires","Auteur contemporain","Rémunération minimum","Budget équilibré"
+TAB_MESSAGE_MAIL="- License","- Convention collective","- Ne pas avoir réalisé un chiffre d'affaires supérieur à 100 000€ sur l année 2023 ","- Les structures doivent avoir été créées après le 1er janvier 2014","- Nombre de représentations","- Le spectacle doit être une création pour Avignon avec une tolérance de 12 représentations de rodage ","- Les auteur-rice-s, compositeur-rice-s, ou chorégraphe-s doivent être contemporain-e-s : vivant-e-s ou mort-e-s depuis moins de 5 ans (les montages de textes et adaptations ne sont pas éligibles)","- Verser à chaque artiste au plateau une rémunération au moins égale à 124,50€ brut en cas de rémunération au cachet et 2614,50€ brut en cas de rémunération mensualisée","- Budget équilbré"
+
